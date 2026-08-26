@@ -1,0 +1,11 @@
+evaluation_data/
+cleaned_data/
+*.csv
+*.xlsx
+.ipynb
+.ipynb_checkpoints/
+__pycache__/
+*.pyc
+
+!mapping_files/*.csv
+!headers_template.xlsx
