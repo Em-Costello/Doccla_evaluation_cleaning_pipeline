@@ -186,9 +186,16 @@ Count columns — `*_Vaccination_Count`, `Inhaler_Prescription_Count`, `Predniso
 
 ### 3.6 Evidence of rescue pack
 
-An `Evidence_of_Rescue_Pack` count column is added to `patients_df`. The script scans the free-text dose columns (`Inhaler_Dose`, `Prednisolone_Dose`, `Antibiotic_Dose`) for case-insensitive mentions of the phrase "rescue pack", counts matching rows per patient, and merges the count onto `patients_df`, filling with zero where there is no mention. 
+An `Evidence_of_Rescue_Pack` count column is added to `patients_df`, counting distinct rescue pack events per patient. A rescue pack is a home supply of prednisolone and antibiotics that a patient keeps for self-treating a flare-up.
 
-> Rescue packs are administered as a combination of inhalers, prednisolone, and antibiotic. The evidence for rescue pack flag can be added to to include this upon request.
+Evidence is drawn from two signals, combined into a single count:
+
+- **Explicit text mention**: the free-text dose columns (`Inhaler_Dose`, `Prednisolone_Dose`, `Antibiotic_Dose`) are scanned for case-insensitive mentions of the phrase "rescue pack".
+- **Inferred from prescribing pattern**: prednisolone and antibiotics issued to the same patient on the same date, even where no text mention of rescue pack is present. Inhaler is excluded from this inferred signal, as it is routine maintenance medication reissued regularly regardless of exacerbation, and its inclusion would likely undercount genuine rescue packs.
+
+Each event is identified by a (patient, date) pair. Where the same date is flagged by both signals — for example, a prednisolone/antibiotic pair issued on the same day as a text mention — it is counted once, not twice, to avoid double-counting. The combined count is merged onto `patients_df`, filling with zero where there is no evidence of either kind.
+
+> This is a proxy indicator, not a confirmed clinical fact. It depends on free-text phrasing at the point of prescribing (for the text signal) and same-day issuance (for the inferred signal), so it may under- or over-represent actual rescue pack usage.
 
 ### 3.7 Parse dates
 

@@ -266,6 +266,11 @@ def process_gp_file(gp_id, source_file):
         fail("A patient-level field is filled on a non-anchor row - "
              "re-run diagnostics, this file may not match the assumed structure.")
 
+    # ---------- 3.5 Parse dates needed for rescue pack matching (ahead of section 6) ----------
+    RESCUE_PACK_DATE_COLS = ['Inhaler_Issue_Date', 'Prednisolone_Issue_Date', 'Antibiotic_Issue_Date']
+    for c in RESCUE_PACK_DATE_COLS:
+        df[c] = pd.to_datetime(df[c], dayfirst=True, errors='coerce')
+
     # ---------- 4. patients_df: one row per patient ----------
     patients_df = df.loc[is_anchor, PATIENT_COLS].reset_index(drop=True)
     patients_df['Depression'] = patients_df['Depression'].notna().map({True: 'Yes', False: pd.NA})
@@ -299,16 +304,45 @@ def process_gp_file(gp_id, source_file):
     count_cols = [c for _, c in count_specs]
     patients_df[count_cols] = patients_df[count_cols].fillna(0).astype(int)
 
-    # ---------- 5.6 'Evidence of Rescue Pack' count onto patients_df ----------
-    rescue_pack_mentioned = pd.Series(False, index=df.index)
-    for col in RESCUE_PACK_TEXT_COLS:
-        rescue_pack_mentioned |= df[col].str.contains('rescue pack', case=False, na=False)
+    # ---------- 5.6 Evidence of Rescue Pack (text mention OR same-day pred+antibiotic) ----------
+    RESCUE_PACK_COL_PAIRS = [
+        ('Inhaler_Dose', 'Inhaler_Issue_Date'),
+        ('Prednisolone_Dose', 'Prednisolone_Issue_Date'),
+        ('Antibiotic_Dose', 'Antibiotic_Issue_Date'),
+    ]
+
+    # Signal 1: explicit "rescue pack" text mention, paired with that row's (parsed) date
+    text_mentioned = pd.Series(False, index=df.index)
+    text_mention_date = pd.Series(pd.NaT, index=df.index)
+    for dose_col, date_col in RESCUE_PACK_COL_PAIRS:
+        match = df[dose_col].str.contains('rescue pack', case=False, na=False)
+        text_mentioned |= match
+        text_mention_date = text_mention_date.mask(match, df[date_col])
+
+    text_events = set(
+        zip(df.loc[text_mentioned, 'Patient_ID'], text_mention_date[text_mentioned])
+    )
+
+    # Signal 2: prednisolone + antibiotic issued on the same (parsed) date
+    prednisolone_dates = set(
+        zip(df.loc[df['Prednisolone_Issue_Date'].notna(), 'Patient_ID'],
+            df.loc[df['Prednisolone_Issue_Date'].notna(), 'Prednisolone_Issue_Date'])
+    )
+    antibiotic_dates = set(
+        zip(df.loc[df['Antibiotic_Issue_Date'].notna(), 'Patient_ID'],
+            df.loc[df['Antibiotic_Issue_Date'].notna(), 'Antibiotic_Issue_Date'])
+    )
+    inferred_events = prednisolone_dates & antibiotic_dates
+
+    # Union: a (Patient_ID, date) counts once even if flagged by both signals
+    rescue_pack_events = text_events | inferred_events
+
     rescue_pack_counts = (
-        df.loc[rescue_pack_mentioned]
-        .groupby('Patient_ID')
-        .size()
+        pd.Series([pid for pid, _ in rescue_pack_events], name='Patient_ID')
+        .value_counts()
         .rename('Evidence_of_Rescue_Pack')
     )
+    
     patients_df = patients_df.merge(rescue_pack_counts, on='Patient_ID', how='left')
     patients_df['Evidence_of_Rescue_Pack'] = patients_df['Evidence_of_Rescue_Pack'].fillna(0).astype(int)
 
