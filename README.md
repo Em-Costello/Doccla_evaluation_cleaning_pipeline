@@ -180,9 +180,9 @@ Once patients are anchored, the sparse event rows attached to each patient are s
 
 Together with the `Patients` table, this gives **nine** output tables per run.
 
-### 3.5 Add prescription/course/consultation counts
+### 3.5 Add prescription/course/vaccination/consultation counts
 
-Count columns — `Inhaler_Prescription_Count`, `Prednisolone_Course_Count`, `Antibiotic_Course_Count`, and `Consultation_Count` — are added to `patients_df` by grouping each corresponding event table and left-merging the counts back onto the patients table. Patients with no matching events are given a count of zero rather than `NaN`, since "zero prescriptions" is a known value while a missing `Patient_ID` match would not be.
+Count columns — `*_Vaccination_Count`, `Inhaler_Prescription_Count`, `Prednisolone_Course_Count`, `Antibiotic_Course_Count`, and `Consultation_Count` — are added to `patients_df` by grouping each corresponding event table and left-merging the counts back onto the patients table. Patients with no matching events are given a count of zero rather than `NaN`, since "zero prescriptions" is a known value while a missing `Patient_ID` match would not be.
 
 ### 3.6 Evidence of rescue pack
 

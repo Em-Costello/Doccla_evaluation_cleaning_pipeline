@@ -312,6 +312,16 @@ def process_gp_file(gp_id, source_file):
     patients_df = patients_df.merge(rescue_pack_counts, on='Patient_ID', how='left')
     patients_df['Evidence_of_Rescue_Pack'] = patients_df['Evidence_of_Rescue_Pack'].fillna(0).astype(int)
 
+    # ---------- 5.7 Vaccinated (Y/N) flags onto patients_df ----------
+    vaccination_specs = [
+        (influenza_df, 'Influenza_Vaccinated'),
+        (pneumococcal_df, 'Pneumococcal_Vaccinated'),
+        (covid_df, 'COVID_Vaccinated'),
+    ]
+    for event_table, flag_col in vaccination_specs:
+        vaccinated_ids = set(event_table['Patient_ID'])
+        patients_df[flag_col] = patients_df['Patient_ID'].isin(vaccinated_ids).map({True: 'Yes', False: pd.NA})
+
     # ---------- 6. Parse dates in every table ----------
     gp_tables = {
         'patients': patients_df,
