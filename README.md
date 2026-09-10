@@ -184,6 +184,14 @@ Together with the `Patients` table, this gives **nine** output tables per run.
 
 Count columns — `*_Vaccination_Count`, `Inhaler_Prescription_Count`, `Prednisolone_Course_Count`, `Antibiotic_Course_Count`, and `Consultation_Count` — are added to `patients_df` by grouping each corresponding event table and left-merging the counts back onto the patients table. Patients with no matching events are given a count of zero rather than `NaN`, since "zero prescriptions" is a known value while a missing `Patient_ID` match would not be.
 
+### 3.x Pulmonary rehab referral status
+
+Because a patient can have multiple pulmonary rehab referral entries, the raw `Referral_to_Pulmonary_Rehab` text is first standardised via an external mapping file, `mapping_files/pulmonary_rehab_status_mapping.csv`, following the same "fail loud on unmapped values" approach as the other categorical fields (3.2). Each raw value is mapped to one of: `Referred`, `Declined`, `Completed`, or `Excluded`.
+
+`Excluded` covers raw values that don't map cleanly onto a referral outcome — for example, "pulmonary rehabilitation programme not available" (an availability issue, not a patient action), "assessment for pulmonary rehabilitation completed" (the assessment was completed, not the programme itself?), and "pulmonary rehabilitation programme commenced" (in progress, not yet resolved either way). These are mapped explicitly to `Excluded` rather than left out of the mapping file entirely.
+
+Three count columns are added to `patients_df`: `Number_of_Times_Referred`, `Number_of_Times_Declined`, `Number_of_Times_Completed`, each counting how many of that patient's referral entries mapped to that category. Patients with no matching entries are given a count of zero.
+
 ### 3.6 Evidence of rescue pack
 
 An `Evidence_of_Rescue_Pack` count column is added to `patients_df`, counting distinct rescue pack events per patient. A rescue pack is a home supply of prednisolone and antibiotics that a patient keeps for self-treating a flare-up.

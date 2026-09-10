@@ -84,6 +84,8 @@ PATIENT_COLS = ['Patient_ID', 'GP_ID', 'Postcode', 'Age', 'DOB', 'Gender', 'Ethn
 RESCUE_PACK_TEXT_COLS = ['Inhaler_Dose', 'Prednisolone_Dose', 'Antibiotic_Dose']
 
 # ---------- GP sources to process ----------
+username = 'Emily Costello'
+
 GP_SOURCES = [
     {'gp_id': 'GP01', 'source_file': 'evaluation_data/flattened/WHC_GP01.csv'},
     {'gp_id': 'GP02', 'source_file': 'evaluation_data/flattened/HARP_GP02.csv'},
@@ -107,6 +109,8 @@ ETHNICITY_CATEGORY_MAP = ethnicity_mapping['category'].to_dict()
 cardiovascular_mapping = pd.read_csv(Path('mapping_files/cardiovascular_disease_mapping.csv')).set_index('raw_text_lowercase')
 CARDIOVASCULAR_DISEASE_CATEGORY_MAP = cardiovascular_mapping['category'].to_dict()
 
+pulmonary_rehab_mapping = pd.read_csv(Path('mapping_files/pulmonary_rehab_status_mapping.csv')).set_index('raw_text_lowercase')
+PULMONARY_REHAB_CATEGORY_MAP = pulmonary_rehab_mapping['category'].to_dict()
 
 def classify_smoking_status(raw):
     if pd.isna(raw):
@@ -226,6 +230,12 @@ def process_gp_file(gp_id, source_file):
         )
     df['Smoking_Status'] = smoking_classified
 
+    pulmonary_rehab_normalized = df['Referral_to_Pulmonary_Rehab'].astype(str).str.strip().str.lower().replace('nan', pd.NA)
+    unmapped_pulmonary_rehab = set(pulmonary_rehab_normalized.dropna().unique()) - set(PULMONARY_REHAB_CATEGORY_MAP.keys())
+    if unmapped_pulmonary_rehab:
+        fail(f"Unmapped Referral_to_Pulmonary_Rehab value(s) - add rows to pulmonary_rehab_status_mapping.csv: {unmapped_pulmonary_rehab}")
+    df['Pulmonary_Rehab_Status'] = pulmonary_rehab_normalized.map(PULMONARY_REHAB_CATEGORY_MAP)
+
     # ---------- 3. Patient ID: real NHS Number (confirmed patient-row only) ----------
     is_anchor = df['Age'].notna() & df['Postcode'].notna() & df['DOB'].notna()
     if not is_anchor.iloc[0]:
@@ -342,7 +352,7 @@ def process_gp_file(gp_id, source_file):
         .value_counts()
         .rename('Evidence_of_Rescue_Pack')
     )
-    
+
     patients_df = patients_df.merge(rescue_pack_counts, on='Patient_ID', how='left')
     patients_df['Evidence_of_Rescue_Pack'] = patients_df['Evidence_of_Rescue_Pack'].fillna(0).astype(int)
 
@@ -355,6 +365,20 @@ def process_gp_file(gp_id, source_file):
     for event_table, flag_col in vaccination_specs:
         vaccinated_ids = set(event_table['Patient_ID'])
         patients_df[flag_col] = patients_df['Patient_ID'].isin(vaccinated_ids).map({True: 'Yes', False: pd.NA})
+
+    # ---------- 5.8 Pulmonary rehab referral counts onto patients_df ----------
+    rehab_counts = (
+        df.loc[df['Pulmonary_Rehab_Status'].isin(['Referred', 'Declined', 'Completed'])]
+        .groupby(['Patient_ID', 'Pulmonary_Rehab_Status'])
+        .size()
+        .unstack(fill_value=0)
+    )
+    for status, col_name in [('Referred', 'Number_of_Times_Referred'),
+                              ('Declined', 'Number_of_Times_Declined'),
+                              ('Completed', 'Number_of_Times_Completed')]:
+        counts = rehab_counts[status].rename(col_name) if status in rehab_counts.columns else pd.Series(dtype=int, name=col_name)
+        patients_df = patients_df.merge(counts, on='Patient_ID', how='left')
+        patients_df[col_name] = patients_df[col_name].fillna(0).astype(int)
 
     # ---------- 6. Parse dates in every table ----------
     gp_tables = {
@@ -475,7 +499,7 @@ def save_excel_workbook(tables, gp_sources, output_path):
     summary = wb.create_sheet(title='Summary', index=0)
     summary.append(['COPD Evaluation - Cleaned Data Export'])
     summary['A1'].font = TITLE_FONT
-    summary.append([f'Generated: {date.today().strftime("%d/%m/%Y")}'])
+    summary.append([f'Generated: {date.today().strftime("%d/%m/%Y")} by: {username}'])
     summary['A2'].font = BODY_FONT
     summary.append([f'GP surgeries included: {", ".join(g["gp_id"] for g in gp_sources)}'])
     summary['A3'].font = BODY_FONT
