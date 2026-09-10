@@ -146,7 +146,9 @@ Smoking status is cleaned using rule-based keyword parsing (`classify_smoking_st
 
 Any non-blank input in the depression or anxiety columns is standardised to `"Yes"`. Blank input is left as-is (`NaN`) rather than being interpreted as "No," since the absence of a recorded diagnosis doesn't confirm the patient doesn't have the condition — it's preserved as genuinely unknown.
 
-> **Outstanding:** `Cardiovascular_Disease` and `Smoking_Status_Associated_Text` are not yet mapped to standardised categories — real-world values are still being reviewed (the pipeline currently prints a value count of `Cardiovascular_Disease` at the end of each run for this purpose).
+#### Cardiovascular disease
+
+Non-blank inputs in the cardiovascular disease column is standardised to either `Heart Failure` or `Ischaemic heart disease`. Any non-blank input *has* some form of cardiovascular disease, so can be treated as `yes`; blank cells are treated as having no diagnosis, and are left blank. 
 
 ### 3.3 Define and validate anchor variable (NHS number / Patient_ID)
 
