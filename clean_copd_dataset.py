@@ -3,7 +3,6 @@ import numpy as np
 import re
 from pathlib import Path
 from datetime import date
-
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment
 from openpyxl.utils import get_column_letter
@@ -105,6 +104,9 @@ GENDER_CATEGORY_MAP = gender_mapping['category'].to_dict()
 ethnicity_mapping = pd.read_csv(Path('mapping_files/ethnicity_mapping.csv')).set_index('raw_text_lowercase')
 ETHNICITY_CATEGORY_MAP = ethnicity_mapping['category'].to_dict()
 
+cardiovascular_mapping = pd.read_csv(Path('mapping_files/cardiovascular_disease_mapping.csv')).set_index('raw_text_lowercase')
+CARDIOVASCULAR_DISEASE_CATEGORY_MAP = cardiovascular_mapping['category'].to_dict()
+
 
 def classify_smoking_status(raw):
     if pd.isna(raw):
@@ -191,6 +193,12 @@ def process_gp_file(gp_id, source_file):
     if unmapped_gender:
         fail(f"Unmapped Gender value(s) - add rows to gender_mapping.csv: {unmapped_gender}")
     df['Gender'] = gender_normalized.map(GENDER_CATEGORY_MAP)
+
+    cardiovascular_normalized = df['Cardiovascular_Disease'].astype(str).str.replace(',', '', regex=False).str.strip().str.lower().replace('nan', pd.NA)
+    unmapped_cardiovascular = set(cardiovascular_normalized.dropna().unique()) - set(CARDIOVASCULAR_DISEASE_CATEGORY_MAP.keys())
+    if unmapped_cardiovascular:
+        fail(f"Unmapped Cardiovascular_Disease value(s) - add rows to cardiovascular_disease_mapping.csv: {unmapped_cardiovascular}")
+    df['Cardiovascular_Disease'] = cardiovascular_normalized.map(CARDIOVASCULAR_DISEASE_CATEGORY_MAP)
 
     ethnicity_normalized = (
             df['Ethnicity']
@@ -491,6 +499,3 @@ save_excel_workbook(
 
 print(f"\nTotal GPs processed: {len(GP_SOURCES)}")
 print(f"Total patients: {len(patients_df)}")
-
-# print cardiovascular disease
-print(patients_df['Cardiovascular_Disease'].value_counts(dropna=False))
